@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Game - Дрон проти шахедів</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background: #000;
+            color: #fff;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* HUD стилі */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #00ff00;
+            font-size: 16px;
+            line-height: 1.6;
+        }
+
+        .hud-item {
+            margin: 5px 0;
+        }
+
+        .health {
+            color: #ff4444;
+        }
+
+        .score {
+            color: #ffff00;
+        }
+
+        .timer {
+            color: #00ffff;
+        }
+
+        .city-health {
+            color: #ff8800;
+        }
+
+        /* Віртуальний джойстік для мобільних */
+        #joystick {
+            display: none;
+            position: absolute;
+            bottom: 80px;
+            left: 80px;
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            z-index: 100;
+        }
+
+        #joystick-thumb {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #shoot-button {
+            display: none;
+            position: absolute;
+            bottom: 80px;
+            right: 80px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 0, 0, 0.5);
+            border: 3px solid rgba(255, 0, 0, 0.8);
+            border-radius: 50%;
+            z-index: 100;
+            font-size: 24px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        /* Меню паузи */
+        #pauseMenu {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 10px;
+            border: 3px solid #00ff00;
+            z-index: 200;
+            text-align: center;
+        }
+
+        #pauseMenu h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #00ff00;
+        }
+
+        #pauseMenu button {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #00ff00;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+        }
+
+        #pauseMenu button:hover {
+            background: #00cc00;
+        }
+
+        /* Game Over екран */
+        #gameOver {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 40px;
+            border-radius: 10px;
+            border: 3px solid #ff0000;
+            z-index: 300;
+            text-align: center;
+        }
+
+        #gameOver h2 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ff0000;
+        }
+
+        #gameOver button {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 18px;
+            background: #ff0000;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            color: #fff;
+            font-weight: bold;
+        }
+
+        #gameOver button:hover {
+            background: #cc0000;
+        }
+
+        /* Мобільні пристрої */
+        @media (max-width: 768px) {
+            #joystick, #shoot-button {
+                display: flex;
+            }
+            
+            #hud {
+                font-size: 14px;
+                padding: 10px;
+            }
+        }
+
+        /* Інструкції */
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-size: 14px;
+            z-index: 100;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- HUD -->
+    <div id="hud">
+        <div class="hud-item health">❤️ Життя: <span id="lives">3</span></div>
+        <div class="hud-item score">⭐ Рахунок: <span id="score">0</span></div>
+        <div class="hud-item timer">⏱️ Час: <span id="timer">0</span>с</div>
+        <div class="hud-item city-health">🏙️ Місто: <span id="cityHealth">100</span>%</div>
+        <div class="hud-item">🎯 Хвиля: <span id="wave">1</span></div>
+    </div>
+
+    <!-- Віртуальний джойстік -->
+    <div id="joystick">
+        <div id="joystick-thumb"></div>
+    </div>
+
+    <!-- Кнопка стрільби -->
+    <div id="shoot-button">🎯</div>
+
+    <!-- Інструкції -->
+    <div id="instructions">
+        WASD - рух | Миша - поворот | ЛКМ - стрільба | ESC - пауза
+    </div>
+
+    <!-- Меню паузи -->
+    <div id="pauseMenu">
+        <h2>ПАУЗА</h2>
+        <button id="resumeBtn">Продовжити</button>
+        <button id="restartBtn">Почати заново</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="gameOver">
+        <h2>ГРАВЕЦЬ ЗНИЩЕНО</h2>
+        <p style="font-size: 24px; margin: 20px 0;">Фінальний рахунок: <span id="finalScore">0</span></p>
+        <p style="font-size: 18px; margin: 20px 0;">Час гри: <span id="finalTime">0</span>с</p>
+        <button id="restartGameBtn">Грати знову</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // ============================================
+        // ГЛОБАЛЬНІ ЗМІННІ ТА КОНСТАНТИ
+        // ============================================
+        
+        const canvas = document.getElementById('gameCanvas');
+        let scene, camera, renderer;
+        let player, playerHealth = 3;
+        let bullets = [];
+        let enemies = [];
+        let buildings = [];
+        let cityHealth = 100;
+        let score = 0;
+        let gameTime = 0;
+        let wave = 1;
+        let isPaused = false;
+        let isGameOver = false;
+        let clock = new THREE.Clock();
+        
+        // Керування
+        const keys = {};
+        let mouseX = 0, mouseY = 0;
+        let joystickActive = false;
+        let joystickDirection = { x: 0, y: 0 };
+        
+        // Константи ігрового процесу
+        const PLAYER_SPEED = 0.15;
+        const BULLET_SPEED = 0.5;
+        const ENEMY_SPEED = 0.05;
+        const SHOOT_COOLDOWN = 200; // мс
+        const WAVE_ENEMY_INCREMENT = 3;
+        const SPAWN_INTERVAL = 3000; // мс
+        
+        let lastShootTime = 0;
+        let lastSpawnTime = 0;
+        let enemiesInWave = 5;
+        let enemiesSpawned = 0;
+        
+        // Звуки (простий синтезатор)
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // ============================================
+        // ІНІЦІАЛІЗАЦІЯ СЦЕНИ
+        // ============================================
+        
+        function init() {
+            // Створення сцени
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.FogExp2(0x050510, 0.015);
+            
+            // Камера
+            camera = new THREE.PerspectiveCamera(
+                75,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 10, 20);
+            
+            // Рендерер
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: canvas,
+                antialias: true 
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Освітлення
+            const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(50, 100, 50);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -50;
+            directionalLight.shadow.camera.right = 50;
+            directionalLight.shadow.camera.top = 50;
+            directionalLight.shadow.camera.bottom = -50;
+            scene.add(directionalLight);
+            
+            // Точкові світла міста (нічні вогні)
+            for (let i = 0; i < 10; i++) {
+                const light = new THREE.PointLight(
+                    Math.random() > 0.5 ? 0xffaa00 : 0x00aaff,
+                    1,
+                    30
+                );
+                light.position.set(
+                    Math.random() * 100 - 50,
+                    Math.random() * 20 + 5,
+                    Math.random() * 100 - 50
+                );
+                scene.add(light);
+            }
+            
+            // Створення міста
+            createCity();
+            
+            // Створення гравця
+            createPlayer();
+            
+            // Створення землі
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x1a1a2e,
+                roughness: 0.8
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -1;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Події
+            setupEventListeners();
+            
+            // Запуск ігрового циклу
+            animate();
+        }
+        
+        // ============================================
+        // СТВОРЕННЯ ІГРОВИХ ОБ'ЄКТІВ
+        // ============================================
+        
+        function createPlayer() {
+            // Дрон гравця (простий префаб з кубів)
+            const droneGroup = new THREE.Group();
+            
+            // Тіло дрона
+            const bodyGeometry = new THREE.BoxGeometry(1, 0.5, 1);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x00ff00,
+                emissive: 0x00ff00,
+                emissiveIntensity: 0.2,
+                metalness: 0.7,
+                roughness: 0.3
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.castShadow = true;
+            droneGroup.add(body);
+            
+            // Пропелери (4 штуки)
+            const propellerGeometry = new THREE.BoxGeometry(0.1, 0.1, 2);
+            const propellerMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x888888,
+                metalness: 0.5
+            });
+            
+            const positions = [
+                { x: 0.6, z: 0.6 },
+                { x: -0.6, z: 0.6 },
+                { x: 0.6, z: -0.6 },
+                { x: -0.6, z: -0.6 }
+            ];
+            
+            positions.forEach(pos => {
+                const propeller = new THREE.Mesh(propellerGeometry, propellerMaterial);
+                propeller.position.set(pos.x, 0.3, pos.z);
+                droneGroup.add(propeller);
+            });
+            
+            // Індикатор напрямку
+            const indicatorGeometry = new THREE.ConeGeometry(0.2, 0.5, 4);
+            const indicatorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 0.5
+            });
+            const indicator = new THREE.Mesh(indicatorGeometry, indicatorMaterial);
+            indicator.position.set(0, 0.5, -0.7);
+            indicator.rotation.x = Math.PI / 2;
+            droneGroup.add(indicator);
+            
+            droneGroup.position.set(0, 5, 0);
+            scene.add(droneGroup);
+            
+            player = {
+                mesh: droneGroup,
+                velocity: new THREE.Vector3(),
+                rotation: 0,
+                box: new THREE.Box3()
+            };
+            
+            updatePlayerBoundingBox();
+        }
+        
+        function createCity() {
+            // Процедурна генерація міста з простих кубів
+            const citySize = 40;
+            const spacing = 8;
+            
+            for (let x = -citySize; x < citySize; x += spacing) {
+                for (let z = -citySize; z < citySize; z += spacing) {
+                    // Уникаємо центральної зони для гравця
+                    if (Math.abs(x) < 10 && Math.abs(z) < 10) continue;
+                    
+                    const height = Math.random() * 15 + 5;
+                    const width = Math.random() * 3 + 2;
+                    const depth = Math.random() * 3 + 2;
+                    
+                    const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                    
+                    // Процедурний матеріал з випадковими кольорами
+                    const hue = Math.random() * 0.1 + 0.55; // Сині відтінки
+                    const buildingMaterial = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color().setHSL(hue, 0.5, 0.3),
+                        emissive: new THREE.Color().setHSL(hue, 0.5, 0.2),
+                        emissiveIntensity: 0.3,
+                        roughness: 0.7,
+                        metalness: 0.3
+                    });
+                    
+                    const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                    building.position.set(
+                        x + (Math.random() - 0.5) * 2,
+                        height / 2,
+                        z + (Math.random() - 0.5) * 2
+                    );
+                    building.castShadow = true;
+                    building.receiveShadow = true;
+                    
+                    // Додаємо вікна (емісивні точки)
+                    if (Math.random() > 0.7) {
+                        const windowLight = new THREE.PointLight(0xffff00, 0.5, 5);
+                        windowLight.position.copy(building.position);
+                        windowLight.position.y += height * 0.3;
+                        scene.add(windowLight);
+                    }
+                    
+                    scene.add(building);
+                    
+                    buildings.push({
+                        mesh: building,
+                        box: new THREE.Box3().setFromObject(building),
+                        health: 100
+                    });
+                }
+            }
+        }
+        
+        function createEnemy(position) {
+            // Ворожий шахед (простий префаб)
+            const enemyGroup = new THREE.Group();
+            
+            // Тіло
+            const bodyGeometry = new THREE.BoxGeometry(1.2, 0.4, 1.2);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 0.3,
+                metalness: 0.6,
+                roughness: 0.4
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.castShadow = true;
+            enemyGroup.add(body);
+            
+            // Крила
+            const wingGeometry = new THREE.BoxGeometry(3, 0.1, 0.5);
+            const wingMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x880000,
+                metalness: 0.5
+            });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.y = 0;
+            enemyGroup.add(wings);
+            
+            // Червоний індикатор
+            const lightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+            const lightMaterial = new THREE.MeshStandardMaterial({
+                color: 0xff0000,
+                emissive: 0xff0000,
+                emissiveIntensity: 1
+            });
+            const light = new THREE.Mesh(lightGeometry, lightMaterial);
+            light.position.y = 0.3;
+            enemyGroup.add(light);
+            
+            enemyGroup.position.copy(position);
+            scene.add(enemyGroup);
+            
+            const enemy = {
+                mesh: enemyGroup,
+                velocity: new THREE.Vector3(),
+                box: new THREE.Box3(),
+                health: 2,
+                target: null
+            };
+            
+            updateEnemyBoundingBox(enemy);
+            enemies.push(enemy);
+            
+            return enemy;
+        }
+        
+        function createBullet(position, direction) {
+            // Куля гравця
+            const bulletGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+            const bulletMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 1
+            });
+            const bulletMesh = new THREE.Mesh(bulletGeometry, bulletMaterial);
+            bulletMesh.position.copy(position);
+            
+            // Додаємо світло до кулі
+            const bulletLight = new THREE.PointLight(0xffff00, 1, 5);
+            bulletMesh.add(bulletLight);
+            
+            scene.add(bulletMesh);
+            
+            const bullet = {
+                mesh: bulletMesh,
+                velocity: direction.multiplyScalar(BULLET_SPEED),
+                box: new THREE.Box3(),
+                lifetime: 3000 // 3 секунди
+            };
+            
+            updateBulletBoundingBox(bullet);
+            bullets.push(bullet);
+            
+            playSound(440, 0.05, 'triangle'); // Звук пострілу
+        }
+        
+        // ============================================
+        // ОНОВЛЕННЯ BOUNDING BOXES
+        // ============================================
+        
+        function updatePlayerBoundingBox() {
+            player.box.setFromObject(player.mesh);
+        }
+        
+        function updateEnemyBoundingBox(enemy) {
+            enemy.box.setFromObject(enemy.mesh);
+        }
+        
+        function updateBulletBoundingBox(bullet) {
+            bullet.box.setFromObject(bullet.mesh);
+        }
+        
+        // ============================================
+        // СПАВН ВОРОГІВ
+        // ============================================
+        
+        function spawnEnemyWave() {
+            if (enemiesSpawned >= enemiesInWave) {
+                // Перевірка завершення хвилі
+                if (enemies.length === 0) {
+                    wave++;
+                    enemiesInWave += WAVE_ENEMY_INCREMENT;
+                    enemiesSpawned = 0;
+                    updateHUD();
+                    playSound(523, 0.1, 'sine'); // Звук нової хвилі
+                }
+                return;
+            }
+            
+            const currentTime = Date.now();
+            if (currentTime - lastSpawnTime < SPAWN_INTERVAL) return;
+            
+            lastSpawnTime = currentTime;
+            
+            // Випадкова позиція на краю карти
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 60;
+            const position = new THREE.Vector3(
+                Math.cos(angle) * distance,
+                Math.random() * 10 + 10,
+                Math.sin(angle) * distance
+            );
+            
+            createEnemy(position);
+            enemiesSpawned++;
+        }
+        
+        // ============================================
+        // КЕРУВАННЯ
+        // ============================================
+        
+        function setupEventListeners() {
+            // Клавіатура
+            window.addEventListener('keydown', (e) => {
+                keys[e.key.toLowerCase()] = true;
+                
+                // Пауза
+                if (e.key === 'Escape') {
+                    togglePause();
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+            });
+            
+            // Миша
+            window.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
+            });
+            
+            window.addEventListener('mousedown', (e) => {
+                if (e.button === 0 && !isPaused && !isGameOver) {
+                    shoot();
+                }
+            });
+            
+            // Тач події для мобільних
+            setupTouchControls();
+            
+            // Зміна розміру вікна
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+            
+            // Кнопки меню
+            document.getElementById('resumeBtn').addEventListener('click', togglePause);
+            document.getElementById('restartBtn').addEventListener('click', restartGame);
+            document.getElementById('restartGameBtn').addEventListener('click', restartGame);
+        }
+        
+        function setupTouchControls() {
+            const joystick = document.getElementById('joystick');
+            const joystickThumb = document.getElementById('joystick-thumb');
+            const shootButton = document.getElementById('shoot-button');
+            
+            // Віртуальний джойстик
+            joystick.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystickActive = true;
+            });
+            
+            joystick.addEventListener('touchmove', (e) => {
+                if (!joystickActive) return;
+                e.preventDefault();
+                
+                const touch = e.touches[0];
+                const rect = joystick.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                const deltaX = touch.clientX - centerX;
+                const deltaY = touch.clientY - centerY;
+                const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                const maxDistance = rect.width / 2;
+                
+                const clampedDistance = Math.min(distance, maxDistance);
+                const angle = Math.atan2(deltaY, deltaX);
+                
+                const thumbX = Math.cos(angle) * clampedDistance;
+                const thumbY = Math.sin(angle) * clampedDistance;
+                
+                joystickThumb.style.transform = `translate(calc(-50% + ${thumbX}px), calc(-50% + ${thumbY}px))`;
+                
+                joystickDirection.x = thumbX / maxDistance;
+                joystickDirection.y = -thumbY / maxDistance;
+            });
+            
+            joystick.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                joystickActive = false;
+                joystickDirection.x = 0;
+                joystickDirection.y = 0;
+                joystickThumb.style.transform = 'translate(-50%, -50%)';
+            });
+            
+            // Кнопка стрільби
+            shootButton.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                if (!isPaused && !isGameOver) {
+                    shoot();
+                }
+            });
+            
+            // Тап на екран для стрільби (альтернатива)
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1 && !isPaused && !isGameOver) {
+                    const touch = e.touches[0];
+                    const rect = canvas.getBoundingClientRect();
+                    
+                    // Перевірка, чи тап не по джойстику або кнопці
+                    if (touch.clientX > rect.width / 2) {
+                        shoot();
+                    }
+                }
+            });
+        }
+        
+        function shoot() {
+            const currentTime = Date.now();
+            if (currentTime - lastShootTime < SHOOT_COOLDOWN) return;
+            
+            lastShootTime = currentTime;
+            
+            // Позиція та напрямок пострілу
+            const bulletPosition = player.mesh.position.clone();
+            bulletPosition.y += 0.5;
+            
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation);
+            direction.normalize();
+            
+            createBullet(bulletPosition, direction);
+        }
+        
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pauseMenu').style.display = isPaused ? 'block' : 'none';
+            
+            if (isPaused) {
+                clock.stop();
+            } else {
+                clock.start();
+            }
+        }
+        
+        function restartGame() {
+            // Очищення сцени
+            bullets.forEach(bullet => scene.remove(bullet.mesh));
+            enemies.forEach(enemy => scene.remove(enemy.mesh));
+            bullets = [];
+            enemies = [];
+            
+            // Скидання параметрів
+            playerHealth = 3;
+            cityHealth = 100;
+            score = 0;
+            gameTime = 0;
+            wave = 1;
+            enemiesInWave = 5;
+            enemiesSpawned = 0;
+            isPaused = false;
+            isGameOver = false;
+            
+            // Повернення гравця на початкову позицію
+            player.mesh.position.set(0, 5, 0);
+            player.rotation = 0;
+            player.velocity.set(0, 0, 0);
+            
+            // Відновлення будівель
+            buildings.forEach(building => {
+                building.health = 100;
+                building.mesh.material.opacity = 1;
+                building.mesh.material.transparent = false;
+            });
+            
+            // Приховування меню
+            document.getElementById('pauseMenu').style.display = 'none';
+            document.getElementById('gameOver').style.display = 'none';
+            
+            // Скидання таймера
+            clock.start();
+            
+            updateHUD();
+        }
+        
+        // ============================================
+        // ОНОВЛЕННЯ ІГРОВОЇ ЛОГІКИ
+        // ============================================
+        
+        function updatePlayer(deltaTime) {
+            if (isPaused || isGameOver) return;
+            
+            // Рух гравця (WASD або джойстик)
+            const moveSpeed = PLAYER_SPEED;
+            let moveX = 0;
+            let moveZ = 0;
+            
+            if (keys['w'] || keys['ц']) moveZ -= moveSpeed;
+            if (keys['s'] || keys['і'] || keys['ы']) moveZ += moveSpeed;
+            if (keys['a'] || keys['ф']) moveX -= moveSpeed;
+            if (keys['d'] || keys['в']) moveX += moveSpeed;
+            
+            // Додавання керування від джойстика
+            if (joystickActive) {
+                moveX += joystickDirection.x * moveSpeed;
+                moveZ += joystickDirection.y * moveSpeed;
+            }
+            
+            // Застосування руху
+            player.velocity.x = moveX;
+            player.velocity.z = moveZ;
+            
+            player.mesh.position.x += player.velocity.x;
+            player.mesh.position.z += player.velocity.z;
+            
+            // Обмеження руху в межах карти
+            const boundary = 45;
+            player.mesh.position.x = Math.max(-boundary, Math.min(boundary, player.mesh.position.x));
+            player.mesh.position.z = Math.max(-boundary, Math.min(boundary, player.mesh.position.z));
+            
+            // Поворот гравця (миша)
+            if (!joystickActive) {
+                const targetRotation = Math.atan2(mouseX, mouseY);
+                player.rotation += (targetRotation - player.rotation) * 0.1;
+            } else {
+                // Поворот за напрямком джойстика
+                if (joystickDirection.x !== 0 || joystickDirection.y !== 0) {
+                    const targetRotation = Math.atan2(joystickDirection.x, joystickDirection.y);
+                    player.rotation += (targetRotation - player.rotation) * 0.1;
+                }
+            }
+            
+            player.mesh.rotation.y = player.rotation;
+            
+            // Оновлення bounding box
+            updatePlayerBoundingBox();
+            
+            // Оновлення камери
+            camera.position.x = player.mesh.position.x;
+            camera.position.z = player.mesh.position.z + 20;
+            camera.position.y = player.mesh.position.y + 15;
+            camera.lookAt(player.mesh.position);
+        }
+        
+        function updateBullets(deltaTime) {
+            if (isPaused || isGameOver) return;
+            
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                
+                // Рух кулі
+                bullet.mesh.position.add(bullet.velocity);
+                updateBulletBoundingBox(bullet);
+                
+                // Видалення кулі за межами карти або після lifetime
+                bullet.lifetime -= deltaTime * 1000;
+                const distFromOrigin = bullet.mesh.position.length();
+                
+                if (distFromOrigin > 100 || bullet.lifetime <= 0) {
+                    scene.remove(bullet.mesh);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+                
+                // Перевірка колізій з ворогами
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    if (checkAABBCollision(bullet.box, enemy.box)) {
+                        enemy.health--;
+                        
+                        if (enemy.health <= 0) {
+                            // Знищення ворога
+                            scene.remove(enemy.mesh);
+                            enemies.splice(j, 1);
+                            score += 10;
+                            updateHUD();
+                            playSound(330, 0.1, 'square'); // Звук знищення
+                        }
+                        
+                        // Видалення кулі
+                        scene.remove(bullet.mesh);
+                        bullets.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+        }
+        
+        function updateEnemies(deltaTime) {
+            if (isPaused || isGameOver) return;
+            
+            enemies.forEach(enemy => {
+                // Вибір цілі (гравець або випадкова будівля)
+                if (!enemy.target || Math.random() < 0.01) {
+                    if (Math.random() < 0.7) {
+                        enemy.target = player.mesh.position;
+                    } else {
+                        const randomBuilding = buildings[Math.floor(Math.random() * buildings.length)];
+                        enemy.target = randomBuilding.mesh.position;
+                    }
+                }
+                
+                // Рух до цілі
+                const direction = new THREE.Vector3()
+                    .subVectors(enemy.target, enemy.mesh.position)
+                    .normalize();
+                
+                enemy.velocity.copy(direction).multiplyScalar(ENEMY_SPEED);
+                enemy.mesh.position.add(enemy.velocity);
+                
+                // Поворот до цілі
+                const angle = Math.atan2(direction.x, direction.z);
+                enemy.mesh.rotation.y = angle;
+                
+                // Оновлення bounding box
+                updateEnemyBoundingBox(enemy);
+                
+                // Перевірка колізій з гравцем
+                if (checkAABBCollision(enemy.box, player.box)) {
+                    damagePlayer();
+                    scene.remove(enemy.mesh);
+                    const index = enemies.indexOf(enemy);
+                    if (index > -1) enemies.splice(index, 1);
+                }
+                
+                // Перевірка колізій з будівлями
+                buildings.forEach(building => {
+                    if (checkAABBCollision(enemy.box, building.box)) {
+                        damageCity(20);
+                        scene.remove(enemy.mesh);
+                        const index = enemies.indexOf(enemy);
+                        if (index > -1) enemies.splice(index, 1);
+                    }
+                });
+            });
+        }
+        
+        // ============================================
+        // СИСТЕМА КОЛІЗІЙ (AABB)
+        // ============================================
+        
+        function checkAABBCollision(box1, box2) {
+            return box1.intersectsBox(box2);
+        }
+        
+        // ============================================
+        // СИСТЕМА ПОШКОДЖЕНЬ
+        // ============================================
+        
+        function damagePlayer() {
+            playerHealth--;
+            updateHUD();
+            playSound(200, 0.2, 'sawtooth'); // Звук пошкодження
+            
+            if (playerHealth <= 0) {
+                gameOver();
+            }
+        }
+        
+        function damageCity(amount) {
+            cityHealth = Math.max(0, cityHealth - amount);
+            updateHUD();
+            
+            if (cityHealth <= 0) {
+                gameOver();
+            }
+        }
+        
+        function gameOver() {
+            isGameOver = true;
+            isPaused = true;
+            
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('finalTime').textContent = Math.floor(gameTime);
+            document.getElementById('gameOver').style.display = 'block';
+            
+            playSound(150, 0.5, 'sine'); // Звук поразки
+        }
+        
+        // ============================================
+        // HUD
+        // ============================================
+        
+        function updateHUD() {
+            document.getElementById('lives').textContent = playerHealth;
+            document.getElementById('score').textContent = score;
+            document.getElementById('timer').textContent = Math.floor(gameTime);
+            document.getElementById('cityHealth').textContent = cityHealth;
+            document.getElementById('wave').textContent = wave;
+        }
+        
+        // ============================================
+        // ЗВУКИ
+        // ============================================
+        
+        function playSound(frequency, duration, type = 'sine') {
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = type;
+                oscillator.frequency.value = frequency;
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + duration);
+            } catch (e) {
+                // Ігноруємо помилки звуку
+            }
+        }
+        
+        // ============================================
+        // ГОЛОВНИЙ ІГРОВИЙ ЦИКЛ
+        // ============================================
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            
+            if (!isPaused && !isGameOver) {
+                gameTime += deltaTime;
+                updateHUD();
+                
+                // Оновлення ігрових об'єктів
+                updatePlayer(deltaTime);
+                updateBullets(deltaTime);
+                updateEnemies(deltaTime);
+                
+                // Спавн ворогів
+                spawnEnemyWave();
+            }
+            
+            // Рендеринг сцени
+            renderer.render(scene, camera);
+        }
+        
+        // ============================================
+        // ЗАПУСК ГРИ
+        // ============================================
+        
+        init();
+    </script>
+</body>
+</html>
